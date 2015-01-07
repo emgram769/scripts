@@ -1,0 +1,67 @@
+#!/bin/bash
+
+font="Source Code Pro:pixelsize=12:antialias=true:hinting=true"
+background="#626262"
+width=1440
+
+if [[ $(pgrep -cx brm_bar) > 1 ]]; then
+  exit 1;
+fi
+
+fifo=/tmp/brm_bar_fifo
+status=""
+
+function parse_fifo() {
+  if [ "$1" != "[UPDATE]" ]; then
+    status="$1";
+  fi
+}
+
+# Spawn the helper program that just pings for updates.
+if [[ $(pgrep -cx brm_bar_help) < 1 ]]; then
+  ./brm_bar_help &
+fi
+
+while read line < $fifo; do
+
+  parse_fifo "$line"
+  output=""
+
+  # Apps
+  output="$output %{c}[ "
+
+  pianobar="%{A:urxvt -e pianobar &:}pianobar%{A}"
+  output="$output $pianobar"
+
+  firefox="%{A:firefox &:}firefox%{A}"
+  output="$output | $firefox"
+
+  terminal="%{A:urxvt &:}terminal%{A}"
+  output="$output | $terminal"
+
+  output="$output ]"
+
+  if [ "$status" != "" ]; then
+    output="${output}\t\t Status: $status"
+  fi
+
+  output="$output %{l}"
+
+
+  date=$(date)
+  output="${output} %{r}$date\t%{l}"
+
+  battery=$(acpi|sed 's/.\+, \(.\+\)%.*/\1/g')
+  output="$output Battery: $battery%%"
+
+#  cpu=$(top -b -n1 |grep "Cpu"|awk '{printf "%0.2f ", $3}')
+#  output="$output \t CPU: $cpu"
+
+  uptime=$(uptime -p | tr -d '\n' | sed 's/up //g')
+  output="$output \t Uptime: $uptime"
+
+
+
+  echo -e $output | sed 's/\t/ /g';
+done | bar -g${width}x20+0+0 -B $background -f $font | sh &> /tmp/brm_bar_log
+

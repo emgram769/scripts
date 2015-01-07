@@ -1,0 +1,12 @@
+#!/bin/bash
+
+fifo=/tmp/brm_bar_fifo
+
+while true; do
+  if [ ! -p $fifo ]; then
+    mkfifo $fifo;
+  fi
+  echo "[UPDATE]" > $fifo;
+  sleep 1;
+done
+
