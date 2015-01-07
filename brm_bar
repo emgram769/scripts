@@ -19,6 +19,7 @@ stat=""
 desktops=""
 battery=""
 wifi=""
+volume=""
 date=""
 uptime=""
 
@@ -40,6 +41,17 @@ function get_desktops() {
     fi
     (( index += 1 ))
   done
+}
+
+function get_volume() {
+  volume_raw="$1"
+  volume_percent=$(sed 's/.*\[\(.*\)%\].*/\1/g' <<< $volume_raw)
+  if [[ $volume_raw == *"[off]"* ]]; then
+    volume="%{I:$icon_dir/volume_mute.png:}n%{I}\t"
+  else
+    volume_strength=$(( (volume_percent - 1) / 25 ))
+    volume="%{I:$icon_dir/volume_$volume_strength.png:}n%{I}\t"
+  fi
 }
 
 function do_update() {
@@ -70,6 +82,9 @@ function parse_fifo() {
   if [[ "$1" == "[DESKTOP]"* ]]; then
     get_desktops "${1:9}"
   fi
+  if [[ "$1" == "[VOLUME]"* ]]; then
+    get_volume "${1:8}"
+  fi
   if [[ "$1" == "[UPDATE]" ]]; then
     do_update
   fi
@@ -92,6 +107,9 @@ sleep .2 && $support_dir/brm_bar_bspc &
 if [ ! -p $fifo ]; then
   mkfifo $fifo;
 fi
+
+# Initial calls
+sleep .1 && echo "[VOLUME]$(amixer get Master|grep dB)" > $fifo &
 
 while read line < $fifo; do
 
@@ -122,6 +140,10 @@ while read line < $fifo; do
 
   # Right side
   output="$output %{r}"
+
+  if [ "$volume" != "" ]; then
+    output="${output} $volume"
+  fi
 
   if [ "$battery" != "" ]; then
     output="${output} $battery"
