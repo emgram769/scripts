@@ -30,11 +30,11 @@ function get_desktops() {
   for element in "${desktop_array[@]}"
   do
     if [[ $element == "O"* ]] || [[ $element == "F"* ]]; then
-      desktops="${desktops} %{I:$icon_dir/active_desktop.png:}X%{I}"
+      desktops="${desktops} %{I:$icon_dir/desktop_2.png:}X%{I}"
     else if [[ $element == "o"* ]]; then
-      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/full_desktop.png:}-%{I}%{A}"
+      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/desktop_1.png:}-%{I}%{A}"
     else if [[ $element == "f"* ]]; then
-      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/empty_desktop.png:}_%{I}%{A}"
+      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/desktop_0.png:}_%{I}%{A}"
     fi
     fi
     fi
@@ -105,16 +105,16 @@ while read line < $fifo; do
   # Apps
   output="$output [ "
 
-  pianobar="%{A:urxvt -e pianobar &:}pianobar%{A}"
+  pianobar="%{A:urxvt -e pianobar &:}%{I:$icon_dir/pandora.png:}p%{I}%{A}"
   output="$output $pianobar"
 
-  gimp="%{A:gimp &:}gimp%{A}"
+  gimp="%{A:gimp &:}%{I:$icon_dir/gimp.png:}g%{I}%{A}"
   output="$output | $gimp"
 
-  firefox="%{A:firefox &:}firefox%{A}"
+  firefox="%{A:firefox &:}%{I:$icon_dir/firefox.png:}f%{I}%{A}"
   output="$output | $firefox"
 
-  terminal="%{A:urxvt &:}terminal%{A}"
+  terminal="%{A:urxvt &:}%{I:$icon_dir/terminal.png:}t%{I}%{A}"
   output="$output | $terminal"
 
   output="$output ]"
@@ -138,7 +138,6 @@ while read line < $fifo; do
 
   # Left side
   output="$output %{l}"
-
   if [ "$uptime" != "" ]; then
     output="${output} \t $uptime"
   fi
@@ -152,7 +151,7 @@ while read line < $fifo; do
   fi
 
   echo -e $output | sed 's/\t/ /g';
-done | bar -g${width}x20+0+0 -B $background -f $font | sh &> /tmp/brm_bar_log
+done | /home/bwasti/bar/bar -g${width}x20+0+0 -B $background -f $font | sh &> /tmp/brm_bar_log
 
 #  cpu=$(top -b -n1 |grep "Cpu"|awk '{printf "%0.2f ", $3}')
 #  output="$output \t CPU: $cpu"
