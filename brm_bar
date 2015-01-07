@@ -1,25 +1,96 @@
 #!/bin/bash
 
-font="Source Code Pro:pixelsize=12:antialias=true:hinting=true"
-background="#626262"
-width=1440
-
 if [[ $(pgrep -cx brm_bar) > 1 ]]; then
   exit 1;
 fi
 
+# Constants
+
+dir=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+support_dir="$dir/brm_bar_support"
+icon_dir="$support_dir/icons"
 fifo=/tmp/brm_bar_fifo
-status=""
+font="Source Code Pro:pixelsize=12:antialias=true:hinting=true"
+background="#626262"
+width=1440
+
+# Globals
+stat=""
+desktops=""
+battery=""
+wifi=""
+date=""
+uptime=""
+
+function get_desktops() {
+  desktops_raw="$1"
+  desktops=""
+  IFS=':' read -a desktop_array <<< "$desktops_raw"
+  index=0
+  for element in "${desktop_array[@]}"
+  do
+    if [[ $element == "O"* ]] || [[ $element == "F"* ]]; then
+      desktops="${desktops} %{I:$icon_dir/active_desktop.png:}X%{I}"
+    else if [[ $element == "o"* ]]; then
+      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/full_desktop.png:}-%{I}%{A}"
+    else if [[ $element == "f"* ]]; then
+      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/empty_desktop.png:}_%{I}%{A}"
+    fi
+    fi
+    fi
+    (( index += 1 ))
+  done
+}
+
+function do_update() {
+  date=$(date +%c)
+}
+
+function do_slow_update() {
+  battery_raw=$(acpi)
+  battery_parsed=$(sed 's/.\+, \(.\+\)%.*/\1/g' <<< $battery_raw)
+  if [[ $battery_raw == *"Charging"* ]]; then
+    battery="$battery_parsed%% %{I:$icon_dir/battery_charging.png:}X%{I}\t\t"
+  else
+    percent=$(( 7 * ($battery_parsed + 5) / 100 ))
+    battery="$battery_parsed%% %{I:$icon_dir/battery_$percent.png:}X%{I}\t\t"
+  fi
+
+  wifi_strength=$(iwconfig 2>/dev/null | grep "Link Quality" | sed 's/.*Link Quality=\(.*\) Signal.*/\1/g')
+  wifi_percent=$(( 4 * (105*$wifi_strength) / 100 ))
+  wifi="%{I:$icon_dir/wifi_$wifi_percent.png:}W%{I}\t\t"
+
+  uptime=$(uptime -p | tr -d '\n' | sed 's/up //g')
+}
 
 function parse_fifo() {
-  if [ "$1" != "[UPDATE]" ]; then
-    status="$1";
+  if [[ {"$1" == "[STATUS]"* ]]; then
+    stat="${1:8}"
+  fi
+  if [[ "$1" == "[DESKTOP]"* ]]; then
+    get_desktops "${1:9}"
+  fi
+  if [[ "$1" == "[UPDATE]" ]]; then
+    do_update
+  fi
+  if [[ "$1" == "[UPDATESLOW]" ]]; then
+    do_slow_update
   fi
 }
 
-# Spawn the helper program that just pings for updates.
-if [[ $(pgrep -cx brm_bar_help) < 1 ]]; then
-  ./brm_bar_help &
+# Spawn new helper programs.
+killall brm_bar_ping -q
+$support_dir/brm_bar_ping &
+
+killall brm_bar_ping_slow -q
+sleep .1 && $support_dir/brm_bar_ping_slow &
+
+killall brm_bar_bspc -q
+sleep .2 && $support_dir/brm_bar_bspc &
+
+# Make sure the fifo is real!
+if [ ! -p $fifo ]; then
+  mkfifo $fifo;
 fi
 
 while read line < $fifo; do
@@ -27,11 +98,18 @@ while read line < $fifo; do
   parse_fifo "$line"
   output=""
 
+
+  # Center
+  output="$output %{c}"
+
   # Apps
-  output="$output %{c}[ "
+  output="$output [ "
 
   pianobar="%{A:urxvt -e pianobar &:}pianobar%{A}"
   output="$output $pianobar"
+
+  gimp="%{A:gimp &:}gimp%{A}"
+  output="$output | $gimp"
 
   firefox="%{A:firefox &:}firefox%{A}"
   output="$output | $firefox"
@@ -41,27 +119,41 @@ while read line < $fifo; do
 
   output="$output ]"
 
-  if [ "$status" != "" ]; then
-    output="${output}\t\t Status: $status"
+
+  # Right side
+  output="$output %{r}"
+
+  if [ "$battery" != "" ]; then
+    output="${output} $battery"
   fi
 
+  if [ "$wifi" != "" ]; then
+    output="${output} $wifi"
+  fi
+
+  if [ "$date" != "" ]; then
+    output="${output} $date \t"
+  fi
+
+
+  # Left side
   output="$output %{l}"
 
+  if [ "$uptime" != "" ]; then
+    output="${output} \t $uptime"
+  fi
 
-  date=$(date)
-  output="${output} %{r}$date\t%{l}"
+  if [ "$desktops" != "" ]; then
+    output="${output} \t $desktops"
+  fi
 
-  battery=$(acpi|sed 's/.\+, \(.\+\)%.*/\1/g')
-  output="$output Battery: $battery%%"
-
-#  cpu=$(top -b -n1 |grep "Cpu"|awk '{printf "%0.2f ", $3}')
-#  output="$output \t CPU: $cpu"
-
-  uptime=$(uptime -p | tr -d '\n' | sed 's/up //g')
-  output="$output \t Uptime: $uptime"
-
-
+  if [ "$stat" != "" ]; then
+    output="${output} $stat"
+  fi
 
   echo -e $output | sed 's/\t/ /g';
 done | bar -g${width}x20+0+0 -B $background -f $font | sh &> /tmp/brm_bar_log
+
+#  cpu=$(top -b -n1 |grep "Cpu"|awk '{printf "%0.2f ", $3}')
+#  output="$output \t CPU: $cpu"
 

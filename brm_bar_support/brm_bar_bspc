@@ -1,0 +1,9 @@
+#!/bin/bash
+
+fifo=/tmp/brm_bar_fifo
+
+bspc control --subscribe |
+while read line; do
+  echo "[DESKTOP]$line" > $fifo;
+done
+

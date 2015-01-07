@@ -1,0 +1,10 @@
+#!/bin/bash
+
+fifo=/tmp/brm_bar_fifo
+
+while true; do
+  echo "[UPDATESLOW]" > $fifo;
+  sleep 60;
+done
+
+
