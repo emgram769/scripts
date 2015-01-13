@@ -5,13 +5,12 @@ if [[ $(pgrep -cx brm_bar) > 1 ]]; then
 fi
 
 # Constants
-
 dir=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 support_dir="$dir/brm_bar_support"
 icon_dir="$support_dir/icons"
 fifo=/tmp/brm_bar_fifo
 font="Source Code Pro:pixelsize=12:antialias=true:hinting=true"
-background="#626262"
+background="#626262" #$dir/../bar/test.png" #"#626262"
 width=1440
 
 # Globals
@@ -20,6 +19,7 @@ desktops=""
 battery=""
 wifi=""
 volume=""
+song=""
 date=""
 uptime=""
 
@@ -31,11 +31,11 @@ function get_desktops() {
   for element in "${desktop_array[@]}"
   do
     if [[ $element == "O"* ]] || [[ $element == "F"* ]]; then
-      desktops="${desktops} %{I:$icon_dir/desktop_2.png:}X%{I}"
+      desktops="${desktops} %{I:$icon_dir/desktop_2.png:}"
     else if [[ $element == "o"* ]]; then
-      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/desktop_1.png:}-%{I}%{A}"
+      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/desktop_1.png:}%{A}"
     else if [[ $element == "f"* ]]; then
-      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/desktop_0.png:}_%{I}%{A}"
+      desktops="${desktops} %{A:bspc desktop -f ^$index:}%{I:$icon_dir/desktop_0.png:}%{A}"
     fi
     fi
     fi
@@ -47,32 +47,46 @@ function get_volume() {
   volume_raw="$1"
   volume_percent=$(sed 's/.*\[\(.*\)%\].*/\1/g' <<< $volume_raw)
   if [[ $volume_raw == *"[off]"* ]]; then
-    volume="%{I:$icon_dir/volume_mute.png:}n%{I}\t"
+    volume="%{I:$icon_dir/volume_mute.png:}\t"
   else
     volume_strength=$(( (volume_percent - 1) / 25 ))
-    volume="%{I:$icon_dir/volume_$volume_strength.png:}n%{I}\t"
+    volume="%{I:$icon_dir/volume_$volume_strength.png:}\t"
   fi
 }
 
 function do_update() {
   date=$(date +%c)
+  if [[ $(pgrep -c pianobar) < 1 ]]; then
+    song=""
+  fi
 }
 
 function do_slow_update() {
   battery_raw=$(acpi)
   battery_parsed=$(sed 's/.\+, \(.\+\)%.*/\1/g' <<< $battery_raw)
   if [[ $battery_raw == *"Charging"* ]]; then
-    battery="$battery_parsed%% %{I:$icon_dir/battery_charging.png:}X%{I}\t\t"
+    battery="$battery_parsed%% %{I:$icon_dir/battery_charging.png:}\t\t"
   else
     percent=$(( 7 * ($battery_parsed + 5) / 100 ))
-    battery="$battery_parsed%% %{I:$icon_dir/battery_$percent.png:}X%{I}\t\t"
+    battery="$battery_parsed%% %{I:$icon_dir/battery_$percent.png:}\t\t"
   fi
 
-  wifi_strength=$(iwconfig 2>/dev/null | grep "Link Quality" | sed 's/.*Link Quality=\(.*\) Signal.*/\1/g')
+  wifi_line=$(iwconfig 2> /dev/null |grep "Link Quality")
+  wifi_strength=0
+  if [[ $wifi_line != "" ]]; then
+    wifi_strength=$(iwconfig 2>/dev/null | grep "Link Quality" | sed 's/.*Link Quality=\(.*\) Signal.*/\1/g' | sed '/[0-9]\+\/[0-9]\+/!s/.*/0/g')
+  fi
+  if [[ $wifi_strength == "" ]]; then
+    wifi_strength=0
+  fi
   wifi_percent=$(( 4 * (105*$wifi_strength) / 100 ))
-  wifi="%{I:$icon_dir/wifi_$wifi_percent.png:}W%{I}\t\t"
+  wifi="%{I:$icon_dir/wifi_$wifi_percent.png:}\t\t"
 
   uptime=$(uptime -p | tr -d '\n' | sed 's/up //g')
+}
+
+function get_song() {
+  song="\t$1"
 }
 
 function parse_fifo() {
@@ -84,6 +98,9 @@ function parse_fifo() {
   fi
   if [[ "$1" == "[VOLUME]"* ]]; then
     get_volume "${1:8}"
+  fi
+  if [[ "$1" == "[SONG]"* ]]; then
+    get_song "${1:6}"
   fi
   if [[ "$1" == "[UPDATE]" ]]; then
     do_update
@@ -121,21 +138,21 @@ while read line < $fifo; do
   output="$output %{c}"
 
   # Apps
-  output="$output [ "
+  #output="$output [ "
 
-  pianobar="%{A:urxvt -e pianobar &:}%{I:$icon_dir/pandora.png:}p%{I}%{A}"
+  pianobar="%{A:pianobar &:}%{I:$icon_dir/pandora.png:}%{A}"
   output="$output $pianobar"
 
-  gimp="%{A:gimp &:}%{I:$icon_dir/gimp.png:}g%{I}%{A}"
-  output="$output | $gimp"
+  gimp="%{A:gimp &:}%{I:$icon_dir/gimp.png:}%{A}"
+  output="$output $gimp"
 
-  firefox="%{A:firefox &:}%{I:$icon_dir/firefox.png:}f%{I}%{A}"
-  output="$output | $firefox"
+  firefox="%{A:firefox &:}%{I:$icon_dir/firefox.png:}%{A}"
+  output="$output $firefox"
 
-  terminal="%{A:urxvt &:}%{I:$icon_dir/terminal.png:}t%{I}%{A}"
-  output="$output | $terminal"
+  terminal="%{A:urxvt &:}%{I:$icon_dir/terminal.png:}%{A}"
+  output="$output $terminal"
 
-  output="$output ]"
+  #output="$output ]"
 
 
   # Right side
@@ -160,20 +177,25 @@ while read line < $fifo; do
 
   # Left side
   output="$output %{l}"
-  if [ "$uptime" != "" ]; then
-    output="${output} \t $uptime"
-  fi
 
   if [ "$desktops" != "" ]; then
     output="${output} \t $desktops"
   fi
+
+  if [ "$song" != "" ]; then
+    output="${output} $song"
+  fi
+
+#  if [ "$uptime" != "" ]; then
+#    output="${output} \t $uptime"
+#  fi
 
   if [ "$stat" != "" ]; then
     output="${output} $stat"
   fi
 
   echo -e $output | sed 's/\t/ /g';
-done | /home/bwasti/bar/bar -g${width}x20+0+0 -B $background -f $font | sh &> /tmp/brm_bar_log
+done | bar -g${width}x20+0+0 -B $background -f $font | sh &> /tmp/brm_bar_log
 
 #  cpu=$(top -b -n1 |grep "Cpu"|awk '{printf "%0.2f ", $3}')
 #  output="$output \t CPU: $cpu"
