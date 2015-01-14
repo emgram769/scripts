@@ -74,12 +74,17 @@ function do_slow_update() {
   wifi_line=$(iwconfig 2> /dev/null |grep "Link Quality")
   wifi_strength=0
   if [[ $wifi_line != "" ]]; then
-    wifi_strength=$(iwconfig 2>/dev/null | grep "Link Quality" | sed 's/.*Link Quality=\(.*\) Signal.*/\1/g' | sed '/[0-9]\+\/[0-9]\+/!s/.*/0/g')
+    wifi_strength=$(iwconfig 2>/dev/null | grep "Link Quality" | sed 's/.*Link Quality=\(.*\) Signal.*/\1/g' | sed '/[0-9]\+\/[0-9]\+/!s/.*/-1/g')
   fi
   if [[ $wifi_strength == "" ]]; then
     wifi_strength=0
   fi
-  wifi_percent=$(( 4 * (105*$wifi_strength) / 100 ))
+  if [[ $wifi_strength == "-1" ]]; then
+    wifi_percent="x"
+  else
+    wifi_percent=$(( 4 * (105*$wifi_strength) / 100 ))
+  fi
+
   wifi="%{I:$icon_dir/wifi_$wifi_percent.png:}\t\t"
 
   uptime=$(uptime -p | tr -d '\n' | sed 's/up //g')
